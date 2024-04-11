@@ -1,16 +1,27 @@
 import os
 import subprocess
 from google.cloud import storage
-from flask import Flask
+from flask import Flask, request
 
 # pylint: disable=C0103
 app = Flask(__name__)
 
-@app.route('/pubsub/push', methods=['POST'])
-def transcode_audio(request):
-    # Extract the bucket name and source file name from the Pub/Sub message
-    # The message is a JSON object
-    message = request.get_json()
+@app.route('/transcode-audio', methods=['POST'])
+def transcode_audio():
+    """Receive and parse Pub/Sub messages."""
+    envelope = request.get_json()
+    if not envelope:
+        msg = "no Pub/Sub message received"
+        print(f"error: {msg}")
+        return f"Bad Request: {msg}", 400
+    
+    if not isinstance(envelope, dict) or "message" not in envelope:
+        msg = "invalid Pub/Sub message format"
+        print(f"error: {msg}")
+        return f"Bad Request: {msg}", 400
+    
+    message = envelope["message"]
+    
     bucket_name = message['bucket']
     source_file_name = message['name']
     
@@ -33,9 +44,9 @@ def transcode_audio(request):
     try:
         subprocess.check_call(['ffmpeg', '-y', '-i', temp_source_file, '-acodec', 'aac', temp_destination_file])
     except subprocess.CalledProcessError as e:
-        result = f'Error occurred during transcoding: {e}'
-        print(result)
-        return result, 500
+        msg = f'Error occurred during transcoding: {e}'
+        print(msg)
+        return msg, 500
 
     # Upload the transcoded file back to GCS
     blob.upload_from_filename(temp_destination_file)
@@ -44,7 +55,8 @@ def transcode_audio(request):
     os.remove(temp_source_file)
     os.remove(temp_destination_file)
 
-    return f'Transcoded file uploaded: {source_file_name}', 201
+    msg = msg
+    return msg, 201
 
 if __name__ == '__main__':
     server_port = os.environ.get('PORT', '8080')
