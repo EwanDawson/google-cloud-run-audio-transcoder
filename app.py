@@ -28,6 +28,12 @@ def transcode_audio():
     client = storage.Client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(source_file_name)
+
+    ## Skip if the file has already been transcoded
+    if blob.metadata and blob.metadata.get('transcoded') == 'true':
+        msg = f'Skipping transcoding for file: {source_file_name}'
+        print(msg)
+        return msg, 200
     
     # Create the src and dest folders if needed
     os.makedirs('/tmp/src', exist_ok=True)
@@ -50,6 +56,9 @@ def transcode_audio():
 
     # Upload the transcoded file back to GCS
     blob.upload_from_filename(temp_destination_file)
+
+    ## Add metadata to blob to indicate it has been transcoded
+    blob.metadata = {'transcoded': 'true'}
 
     # Delete the temporary files
     os.remove(temp_source_file)
