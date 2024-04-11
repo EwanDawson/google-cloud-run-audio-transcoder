@@ -28,10 +28,19 @@ def transcode_audio():
         return f"Bad Request: {msg}", 400
     
     message = envelope["message"]
-    log(json.dumps(message))
+    if not isinstance(message, dict) or "attributes" not in message:
+        msg = "invalid Pub/Sub message format"
+        log(f"error: {msg}")
+        return f"Bad Request: {msg}", 400
     
-    bucket_name = message['bucket']
-    source_file_name = message['name']
+    attributes = message['attributes']
+    if not isinstance(attributes, dict) or "bucketId" not in attributes or "objectId" not in attributes:
+        msg = "invalid Cloud Storage event format"
+        log(f"error: {msg}")
+        return f"Bad Request: {msg}", 400
+    
+    bucket_name = attributes['bucketId']
+    source_file_name = attributes['objectId']
     
     client = storage.Client()
     bucket = client.bucket(bucket_name)
