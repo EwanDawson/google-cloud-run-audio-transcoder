@@ -57,16 +57,16 @@ def transcode_audio():
     os.makedirs('/tmp/src', exist_ok=True)
     os.makedirs('/tmp/dest', exist_ok=True)
 
-    # Temporary file names
+    # Temporary file names, stripping any existing extension from the source file when creating the destination file
     temp_source_file = '/tmp/src/' + source_file_name
-    temp_destination_file = '/tmp/dest/' + source_file_name
+    temp_destination_file = '/tmp/dest/' + os.path.splitext(source_file_name)[0]
 
     # Download the file from GCS
     blob.download_to_filename(temp_source_file)
 
     # Transcode the audio file to m4a/aac, forcing ffmpeg to overwrite if a file exists
     try:
-        subprocess.check_call(['ffmpeg', '-y', '-i', temp_source_file, '-acodec', 'aac', temp_destination_file])
+        subprocess.check_call(['ffmpeg', '-y', '-i', temp_source_file, '-c:a', 'aac', '-f', 'ipod', temp_destination_file])
     except subprocess.CalledProcessError as e:
         msg = f'Error occurred during transcoding: {e}'
         log(msg)
