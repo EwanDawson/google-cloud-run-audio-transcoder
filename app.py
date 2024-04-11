@@ -47,6 +47,7 @@ def transcode_audio():
     blob = bucket.blob(source_file_name)
 
     ## Skip if the file has already been transcoded
+    log(blob.metadata)
     if blob.metadata and blob.metadata.get('transcoded') == 'true':
         msg = f'Skipping transcoding for file: {source_file_name}'
         log(msg)
@@ -76,6 +77,7 @@ def transcode_audio():
 
     ## Add metadata to blob to indicate it has been transcoded
     blob.metadata = {'transcoded': 'true'}
+    blob.patch()
 
     # Delete the temporary files
     os.remove(temp_source_file)
