@@ -1,31 +1,51 @@
-# Cloud Run Hello World with Cloud Code
+# Audio Transcoding Service for Google Cloud Run
 
+This service is designed to transcode audio files stored in Google Cloud Storage (GCS) to the `.m4a` format using the `ffmpeg` tool. It is deployed on Google Cloud Run and is triggered by Pub/Sub messages that contain information about the GCS event.
 
-This "Hello World" sample demonstrates how to deploy a simple "Hello World" application to Cloud Run using the Cloud Code extension for Visual Studio Code.
+## Dependencies
 
-### Table of Contents
-* [Getting Started](#getting-started)
-    1. [Run the app locally with the Cloud Run Emulator](#run-the-app-locally-with-the-cloud-run-emulator)
-    2. [Deploy to Cloud Run](#deploy-to-cloud-run)
-* [Next steps](#next-steps)
-* [Sign up for User Research](#sign-up-for-user-research)
+The service is written in Python and uses the following libraries:
 
----
-## Getting Started
+- `google-cloud-storage` for interacting with Google Cloud Storage
+- `flask` for handling HTTP requests
+- `os` and `subprocess` for file operations and running shell commands
+- `json` and `sys` for logging
 
-### Run the app locally with the Cloud Run Emulator
-1. Click on the Cloud Code status bar and select 'Run on Cloud Run Emulator'.  
-![image](../../img/status-bar.png)
+## Service Endpoint
 
-2. Use the Cloud Run Emulator dialog to specify your [builder option](https://cloud.google.com/code/docs/vscode/deploying-a-cloud-run-app#deploying_a_cloud_run_service?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-). Cloud Code supports Docker, Jib, and Buildpacks. See the skaffold documentation on [builders](https://skaffold.dev/docs/pipeline-stages/builders/) for more information about build artifact types.  
-![image](../../img/build-config.png)
+The service exposes a single HTTP POST endpoint at `/transcode-audio`. This endpoint is designed to receive Pub/Sub messages in the following format:
 
-3. Click ‘Run’. Cloud Code begins building your image.
+```json
+{
+  "message": {
+    "attributes": {
+      "bucketId": "bucket-name",
+      "objectId": "file-name"
+    }
+  }
+}
+```
 
-4. View the build progress in the OUTPUT window. Once the build has finished, click on the URL in the OUTPUT window to view your live application.  
-![image](../../img/cloud-run-url.png)
+## Transcoding Process
 
-5. To stop the application, click the stop icon on the Debug Toolbar.
+When a Pub/Sub message is received, the service performs the following steps:
+
+1. Validates the Pub/Sub message and extracts the bucket name and file name.
+2. Transcodes the audio file to `.m4a` format using `ffmpeg`.
+3. Uploads the transcoded file back to GCS, either replacing the original file or creating a new one, depending on whether the original file had an extension.
+4. Adds metadata to the GCS blob to indicate that it has been transcoded.
+
+## Error Handling
+
+The service logs all actions and errors to stdout. If an error occurs during the transcoding process, it is logged and returned in the HTTP response.
+
+## Deployment
+
+The service is designed to be deployed on Google Cloud Run. It listens on the port specified by the `PORT` environment variable, or `8080` if the variable is not set. The service does not require any special permissions, but the Google Cloud Run service account must have the necessary permissions to read and write to the GCS bucket.
+
+## Reuse and Iteration
+
+To reuse or iterate on this code, you can modify the `transcode_audio` function to handle different types of GCS events, transcode to different audio formats, or perform other types of processing on the files. You can also add more endpoints to the Flask app to handle different types of requests.
 
 ### Deploy to Cloud Run
 
@@ -41,25 +61,3 @@ This "Hello World" sample demonstrates how to deploy a simple "Hello World" appl
 ![image](../../img/cloud-run-deployed-url.png)
 
 ---
-## Next steps
-* Try [debugging your app](https://cloud.google.com/code/docs/vscode/debug?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-) using Cloud Code
-* Navigate the [Cloud Run Explorer](https://cloud.google.com/code/docs/vscode/cloud-run-explorer?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-)
-* Launch the [Log Viewer](https://cloud.google.com/code/docs/vscode/logging#cloud_run_logs?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-)
-* Create a [Cloud Run for Anthos GKE cluster](https://cloud.google.com/code/docs/vscode/adding-an-anthos-gke-cluster?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-)
-* Enable [Cloud APIs and client libraries](https://cloud.google.com/code/docs/vscode/client-libraries?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-)
-* Manage secrets with [Secret Manager](https://cloud.google.com/code/docs/vscode/secret-manager?utm_source=ext&utm_medium=partner&utm_campaign=CDR_kri_gcp_cloudcodereadmes_012521&utm_content=-)
-
-For more Cloud Code tutorials and resources, check out [Awesome Cloud Code](https://github.com/russwolf/awesome-cloudclode)!
-
----
-## Sign up for User Research
-
-We want to hear your feedback!
-
-The Cloud Code team is inviting our user community to sign-up to participate in Google User Experience Research. 
-
-If you’re invited to join a study, you may try out a new product or tell us what you think about the products you use every day. At this time, Google is only sending invitations for upcoming remote studies. Once a study is complete, you’ll receive a token of thanks for your participation such as a gift card or some Google swag. 
-
-[Sign up using this link](https://google.qualtrics.com/jfe/form/SV_4Me7SiMewdvVYhL?reserved=1&utm_source=In-product&Q_Language=en&utm_medium=own_prd&utm_campaign=Q1&productTag=clou&campaignDate=January2021&referral_code=UXbT481079) and answer a few questions about yourself, as this will help our research team match you to studies that are a great fit.
-
-----
