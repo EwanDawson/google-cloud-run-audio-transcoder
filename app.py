@@ -1,26 +1,34 @@
+import sys
 import os
 import subprocess
 from google.cloud import storage
 from flask import Flask, request
+import json
 
 # pylint: disable=C0103
 app = Flask(__name__)
+
+def log(message):
+    print(json.dumps(message))
+    sys.stdout.flush()
 
 @app.route('/transcode-audio', methods=['POST'])
 def transcode_audio():
     """Receive and parse Pub/Sub messages."""
     envelope = request.get_json()
+    log(envelope)
     if not envelope:
         msg = "no Pub/Sub message received"
-        print(f"error: {msg}")
+        log(f"error: {msg}")
         return f"Bad Request: {msg}", 400
     
     if not isinstance(envelope, dict) or "message" not in envelope:
         msg = "invalid Pub/Sub message format"
-        print(f"error: {msg}")
+        log(f"error: {msg}")
         return f"Bad Request: {msg}", 400
     
     message = envelope["message"]
+    log(json.dumps(message))
     
     bucket_name = message['bucket']
     source_file_name = message['name']
@@ -32,7 +40,7 @@ def transcode_audio():
     ## Skip if the file has already been transcoded
     if blob.metadata and blob.metadata.get('transcoded') == 'true':
         msg = f'Skipping transcoding for file: {source_file_name}'
-        print(msg)
+        log(msg)
         return msg, 200
     
     # Create the src and dest folders if needed
@@ -51,7 +59,7 @@ def transcode_audio():
         subprocess.check_call(['ffmpeg', '-y', '-i', temp_source_file, '-acodec', 'aac', temp_destination_file])
     except subprocess.CalledProcessError as e:
         msg = f'Error occurred during transcoding: {e}'
-        print(msg)
+        log(msg)
         return msg, 500
 
     # Upload the transcoded file back to GCS
@@ -64,7 +72,8 @@ def transcode_audio():
     os.remove(temp_source_file)
     os.remove(temp_destination_file)
 
-    msg = msg
+    msg = f"Succesfully transcoded file: {source_file_name}"
+    log(msg)
     return msg, 201
 
 if __name__ == '__main__':
