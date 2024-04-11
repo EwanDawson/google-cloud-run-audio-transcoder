@@ -46,6 +46,11 @@ def transcode_audio():
     bucket = client.bucket(bucket_name)
     blob = bucket.get_blob(source_file_name)
 
+    if blob is None:
+        msg = f"File {source_file_name} not found in bucket {bucket_name}"
+        log(msg)
+        return msg, 404
+
     ## Skip if the file has already been transcoded
     log(blob.metadata)
     if blob.metadata and (blob.metadata.get('transcoded') == 'true' or blob.metadata.get('Content-Type') == 'audio/mp4'):
@@ -57,9 +62,15 @@ def transcode_audio():
     os.makedirs('/tmp/src', exist_ok=True)
     os.makedirs('/tmp/dest', exist_ok=True)
 
-    # Temporary file names, stripping any existing extension from the source file when creating the destination file
+    # If the source file has an extension, we strip it and replace it with .m4a. Otherwise, we make no change to the file name
+    if os.path.splitext(source_file_name)[1]:
+        destination_file_name = os.path.splitext(source_file_name)[0] + '.m4a'
+    else:
+        destination_file_name = source_file_name
+    
+    # Temporary file names
     temp_source_file = '/tmp/src/' + source_file_name
-    temp_destination_file = '/tmp/dest/' + os.path.splitext(source_file_name)[0]
+    temp_destination_file = '/tmp/dest/' + destination_file_name
 
     # Download the file from GCS
     blob.download_to_filename(temp_source_file)
@@ -72,11 +83,14 @@ def transcode_audio():
         log(msg)
         return msg, 500
 
-    # Upload the transcoded file back to GCS
-    blob.upload_from_filename(temp_destination_file)
-
+    # Upload the transcoded file back to GCS. Use the same blob if we hvae not changed the file name
+    # Otherwise, upload the transcoded file to a new blob
+    if destination_file_name != source_file_name:
+        blob = bucket.blob(destination_file_name)
+    blob.upload_from_filename(temp_destination_file, content_type='audio/mp4')
+    
     ## Add metadata to blob to indicate it has been transcoded
-    blob.metadata = {'Content-Type': 'audio/mp4','transcoded': 'true'}
+    blob.metadata = {'transcoded': 'true'}
     blob.patch()
 
     # Delete the temporary files
