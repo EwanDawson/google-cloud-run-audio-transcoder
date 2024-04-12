@@ -13,7 +13,7 @@ def log(message):
     print(json.dumps(message))
     sys.stdout.flush()
 
-VALID_AUDIO_TARGET_FORMAT = ['audio/mp4','audio/x-m4a']
+VALID_AUDIO_TARGET_FORMAT = ['audio/mp4']
 
 @app.route('/transcode-audio', methods=['POST'])
 def transcode_audio():
@@ -74,9 +74,9 @@ def transcode_audio():
     os.makedirs('/tmp/src', exist_ok=True)
     os.makedirs('/tmp/dest', exist_ok=True)
 
-    # If the source file has an extension, we strip it and replace it with .m4a. Otherwise, we make no change to the file name
+    # If the source file has an extension, we strip it and replace it with .mp4. Otherwise, we make no change to the file name
     if os.path.splitext(source_file_name)[1]:
-        destination_file_name = os.path.splitext(source_file_name)[0] + '.m4a'
+        destination_file_name = os.path.splitext(source_file_name)[0] + '.mp4'
     else:
         destination_file_name = source_file_name
     
