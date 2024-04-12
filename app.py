@@ -4,6 +4,7 @@ import subprocess
 from google.cloud import storage
 from flask import Flask, request
 import json
+import magic
 
 # pylint: disable=C0103
 app = Flask(__name__)
@@ -11,6 +12,8 @@ app = Flask(__name__)
 def log(message):
     print(json.dumps(message))
     sys.stdout.flush()
+
+VALID_AUDIO_TARGET_FORMAT = ['audio/mp4','audio/x-m4a']
 
 @app.route('/transcode-audio', methods=['POST'])
 def transcode_audio():
@@ -51,19 +54,19 @@ def transcode_audio():
         log(msg)
         return msg, 404
 
-    ## Skip if the file is alredy in the target format or has already been transcoded
-    print("Content-Type:")
-    log(blob.content_type)
+    # Skip if the file is alredy in the target format or has already been transcoded
+    content_type = blob.content_type
+    log(f"Content-Type: {content_type}")
     print("Metadata:")
     log(blob.metadata)
-    if blob.metadata and (blob.metadata.get('transcoded') == 'true' or blob.content_type == 'audio/mp4'):
+    if (blob.metadata and blob.metadata.get('transcoded') == 'true') or content_type in VALID_AUDIO_TARGET_FORMAT:
         msg = f'Skipping transcoding for file: {source_file_name}'
         log(msg)
         return msg, 200
     
-    ## Skip if the file is not an audio file
-    if not blob.content_type.startswith('audio/'):
-        msg = f'File {source_file_name} is not an audio file'
+    # If the file is not an audio/video file or an octet stream, return an error
+    if not content_type.startswith('audio/') and not content_type.startswith('video/') and not content_type == 'application/octet-stream':
+        msg = f'File {source_file_name} is not an audio/video file'
         log(msg)
         return msg, 400
     
@@ -84,9 +87,24 @@ def transcode_audio():
     # Download the file from GCS
     blob.download_to_filename(temp_source_file)
 
-    # Transcode the audio file to m4a/aac, forcing ffmpeg to overwrite if a file exists
+    # If the content type is application/octet-stream, we try to determine the content type using the magic library,
+    # and return an error if it is not an audio/video file
+    if content_type == 'application/octet-stream':
+        mime = magic.Magic(mime=True)
+        content_type = mime.from_file(temp_source_file)
+        log(f"Determined content type of octet stream: {content_type}")
+        if not content_type.startswith('audio/') and not content_type.startswith('video/'):
+            msg = f'File {source_file_name} is not an audio/video file'
+            log(msg)
+            return msg, 400
+        if content_type in VALID_AUDIO_TARGET_FORMAT:
+            msg = f'Skipping transcoding for file: {source_file_name}'
+            log(msg)
+            return msg, 200
+
+    # Transcode the audio/video file to m4a/aac, ignoring any video stream, and forcing ffmpeg to overwrite if a file exists
     try:
-        subprocess.check_call(['ffmpeg', '-y', '-i', temp_source_file, '-c:a', 'aac', '-f', 'ipod', temp_destination_file])
+        subprocess.check_call(['ffmpeg', '-y', '-i', temp_source_file, '-vn', '-c:a', 'aac', '-f', 'ipod', temp_destination_file])
     except subprocess.CalledProcessError as e:
         msg = f'Error occurred during transcoding: {e}'
         log(msg)

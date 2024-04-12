@@ -4,8 +4,9 @@ FROM python:3.12-alpine
 # Set the working directory to /app
 WORKDIR /app
 
-# Install ffmpeg and other dependencies
+# Install ffmpeg, libmagic, and other dependencies
 RUN apk add --no-cache ffmpeg
+RUN apk add --no-cache libmagic
 
 # copy the requirements file used for dependencies
 COPY requirements.txt .
