@@ -51,12 +51,21 @@ def transcode_audio():
         log(msg)
         return msg, 404
 
-    ## Skip if the file has already been transcoded
+    ## Skip if the file is alredy in the target format or has already been transcoded
+    print("Content-Type:")
+    log(blob.content_type)
+    print("Metadata:")
     log(blob.metadata)
-    if blob.metadata and (blob.metadata.get('transcoded') == 'true' or blob.metadata.get('Content-Type') == 'audio/mp4'):
+    if blob.metadata and (blob.metadata.get('transcoded') == 'true' or blob.content_type == 'audio/mp4'):
         msg = f'Skipping transcoding for file: {source_file_name}'
         log(msg)
         return msg, 200
+    
+    ## Skip if the file is not an audio file
+    if not blob.content_type.startswith('audio/'):
+        msg = f'File {source_file_name} is not an audio file'
+        log(msg)
+        return msg, 400
     
     # Create the src and dest folders if needed
     os.makedirs('/tmp/src', exist_ok=True)
