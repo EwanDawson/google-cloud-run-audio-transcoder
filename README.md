@@ -43,10 +43,6 @@ The service logs all actions and errors to stdout. If an error occurs during the
 
 The service is designed to be deployed on Google Cloud Run. It listens on the port specified by the `PORT` environment variable, or `8080` if the variable is not set. The service does not require any special permissions, but the Google Cloud Run service account must have the necessary permissions to read and write to the GCS bucket.
 
-## Reuse and Iteration
-
-To reuse or iterate on this code, you can modify the `transcode_audio` function to handle different types of GCS events, transcode to different audio formats, or perform other types of processing on the files. You can also add more endpoints to the Flask app to handle different types of requests.
-
 ### Deploy to Cloud Run
 
 1. Select 'Deploy to Cloud Run' using the Cloud Code status bar.
@@ -59,5 +55,70 @@ To reuse or iterate on this code, you can modify the `transcode_audio` function 
 
 5. View your live service by clicking on the URL displayed at the top of the 'Deploy to Cloud Run' dialog.  
 ![image](../../img/cloud-run-deployed-url.png)
+
+### Create a Pub/Sub Topic
+
+If you haven't already created a Pub/Sub topic, do so by running the following command:
+
+```bash
+gcloud pubsub topics create [TOPIC_NAME]
+```
+
+Replace `[TOPIC_NAME]` with your desired topic name.
+
+### Grant Pub/Sub Publisher Role to Cloud Storage
+
+Your Cloud Storage service account needs permission to publish to your Pub/Sub topic. Grant the necessary role with the following command:
+
+```bash
+gcloud pubsub topics add-iam-policy-binding [TOPIC_NAME] \
+--member=serviceAccount:service-[PROJECT_NUMBER]@gs-project-accounts.iam.gserviceaccount.com \
+--role=roles/pubsub.publisher
+```
+
+Replace `[TOPIC_NAME]` with your topic name and `[PROJECT_NUMBER]` with your Google Cloud project number.
+
+### Create a Notification Configuration
+
+Now, set up a notification for your bucket. Use the `gsutil` command:
+
+```bash
+gsutil notification create -t [TOPIC_NAME] -f json -e OBJECT_FINALIZE gs://[BUCKET_NAME]
+```
+
+Replace `[TOPIC_NAME]` with your Pub/Sub topic name and `[BUCKET_NAME]` with the name of your Cloud Storage bucket.
+
+This command creates a notification configuration that sends a JSON-formatted event to the specified Pub/Sub topic whenever a new object is created in the specified bucket.
+
+Create a separate notification for each bucket you want to monitor.
+
+### Create a Subscription that Triggers the Transcoder
+
+Use the Cloud Console to create a subscription with a configuration similar to this:
+
+```
+ackDeadlineSeconds: 300
+deadLetterPolicy:
+  deadLetterTopic: [DEAD_LETTER_TOPIC_NAME]
+  maxDeliveryAttempts: 5
+expirationPolicy: {}
+messageRetentionDuration: 604800s
+name: [SUBSCRIPTION_NAME]
+pushConfig:
+  oidcToken:
+    serviceAccountEmail: [SERVICE_ACCOUNT]
+  pushEndpoint: []
+retryPolicy:
+  maximumBackoff: 600s
+  minimumBackoff: 10s
+state: ACTIVE
+topic: [TOPIC_NAME]
+```
+
+Choose `[DEAD_LETTER_TOPIC_NAME]`, `[SUBSCRIPTION_NAME]` as appropriate. Choose (or create) a `[SERVICE_ACCOUNT]` that has the `Cloud Run Invoker` role. `[TOPIC_NAME]` is the name of previously created topic that receives the object creation notifications.
+
+## Reuse and Iteration
+
+To reuse or iterate on this code, you can modify the `transcode_audio` function to handle different types of GCS events, transcode to different audio formats, or perform other types of processing on the files. You can also add more endpoints to the Flask app to handle different types of requests.
 
 ---
